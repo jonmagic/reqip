@@ -1,4 +1,5 @@
 source "https://rubygems.org"
 
-gem "sinatra"
 gem "commonmarker"
+gem "pg"
+gem "sinatra"
