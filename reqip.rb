@@ -1,6 +1,7 @@
 require "commonmarker"
 require "flipper"
-require "flipper/adapters/redis"
+require "flipper/cloud"
+require "flipper/adapters/redis_cache"
 require "flipper/adapters/instrumented"
 require "flipper/middleware/memoizer"
 require_relative "instrumenter"
@@ -10,17 +11,21 @@ require "sinatra"
 require_relative "setup_env_middleware"
 
 redis = Redis.new
-flipper_adapters_redis = Flipper::Adapters::Redis.new(redis)
 instrumenter = Instrumenter.new
-flipper_adapters_instrumented = Flipper::Adapters::Instrumented.new(flipper_adapters_redis, {
-  instrumenter: instrumenter
+flipper = Flipper::Cloud.new(ENV["FLIPPER_TOKEN"], {
+  instrumenter: instrumenter,
+  read_timeout: 5,
+  open_timeout: 5,
+  # debug_output: STDOUT, # uncomment to see http requests in stdout
+  adapter_wrapper: ->(adapter) {
+    flipper_adapters_redis = Flipper::Adapters::RedisCache.new(adapter, redis)
+    Flipper::Adapters::Instrumented.new(flipper_adapters_redis, {
+      instrumenter: instrumenter,
+    })
+  },
 })
 
-use SetupEnvMiddleware, lambda {
-  Flipper.new(flipper_adapters_instrumented, {
-    instrumenter: instrumenter
-  })
-}
+use SetupEnvMiddleware, lambda { flipper }
 use Flipper::Middleware::Memoizer, preload_all: true
 
 index_template = File.read("./index.template")
@@ -55,8 +60,9 @@ end
 get "/" do
   actor = Actor.from_ip(request.ip)
   flipper = request.env["flipper"]
+  feature = flipper[:ip]
   instrumenter = flipper.instrumenter
-  enabled_for_actor = flipper[:ip].enabled?(actor)
+  enabled_for_actor = feature.enabled?(actor)
 
   markdown = [
     readme_markdown,
@@ -75,7 +81,7 @@ get "/" do
       markdown << "  * #{Actor.from_id(id.to_i)}"
     end
   else
-    flipper[:ip].enable_actor(actor)
+    feature.enable_actor(actor)
   end
 
   index_template.gsub(/YIELD_HTML_HERE/, CommonMarker.render_html(markdown.join("\n")))

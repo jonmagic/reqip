@@ -4,6 +4,8 @@ GEM
     commonmarker (0.16.0)
       ruby-enum (~> 0.5)
     flipper (0.11.0.beta5)
+    flipper-cloud (0.11.0.beta5)
+      flipper (~> 0.11.0.beta5)
     flipper-redis (0.11.0.beta5)
       flipper (~> 0.11.0.beta5)
       redis (>= 2.2, < 4.0.0)
@@ -28,6 +30,7 @@ PLATFORMS
 DEPENDENCIES
   commonmarker
   flipper (= 0.11.0.beta5)
+  flipper-cloud (= 0.11.0.beta5)
   flipper-redis (= 0.11.0.beta5)
   redis
   sinatra
