@@ -1,7 +1,9 @@
 require "commonmarker"
 require "pg"
+require "redis"
 require "sinatra"
 
+redis = Redis.new
 db = PG::Connection.new(ENV["DATABASE_URL"] || "postgres://localhost/reqip")
 
 begin
