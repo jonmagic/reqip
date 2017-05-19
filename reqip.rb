@@ -2,18 +2,26 @@ require "commonmarker"
 require "flipper"
 require "flipper/adapters/redis"
 require "flipper/adapters/instrumented"
-require "flipper/instrumenters/memory"
+require "flipper/middleware/memoizer"
+require_relative "instrumenter"
 require "ipaddr"
 require "redis"
 require "sinatra"
+require_relative "setup_env_middleware"
 
 redis = Redis.new
-flipper_instrumenters_memory = Flipper::Instrumenters::Memory.new
 flipper_adapters_redis = Flipper::Adapters::Redis.new(redis)
+instrumenter = Instrumenter.new
 flipper_adapters_instrumented = Flipper::Adapters::Instrumented.new(flipper_adapters_redis, {
-  instrumenter: flipper_instrumenters_memory
+  instrumenter: instrumenter
 })
-flipper = Flipper.new(flipper_adapters_instrumented)
+
+use SetupEnvMiddleware, lambda {
+  Flipper.new(flipper_adapters_instrumented, {
+    instrumenter: instrumenter
+  })
+}
+use Flipper::Middleware::Memoizer, preload_all: true
 
 index_template = File.read("./index.template")
 readme_markdown = File.read("./README.md")
@@ -46,6 +54,8 @@ end
 
 get "/" do
   actor = Actor.from_ip(request.ip)
+  flipper = request.env["flipper"]
+  instrumenter = flipper.instrumenter
   enabled_for_actor = flipper[:ip].enabled?(actor)
 
   markdown = [
@@ -55,7 +65,7 @@ get "/" do
     "* **Flipper instrumented events:**",
   ]
 
-  flipper_instrumenters_memory.events.each do |event|
+  instrumenter.events.each do |event|
     markdown << "  * **#{event.payload[:operation]}** feature **#{event.payload[:feature_name]}** from **#{event.payload[:adapter_name]}** adapter"
   end
 
